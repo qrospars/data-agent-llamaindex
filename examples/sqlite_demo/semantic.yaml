@@ -1,0 +1,3 @@
+project: sqlite_demo
+business_rules:
+  - Use sales_summary view when possible.
