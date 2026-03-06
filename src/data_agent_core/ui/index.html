@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Data Agent Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/ui/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="bg-layer bg-one"></div>
+    <div class="bg-layer bg-two"></div>
+
+    <header class="topbar fade-in">
+      <div class="brand">
+        <span class="brand-mark">DA</span>
+        <div>
+          <h1>Data Agent Console</h1>
+          <p>Conversational analytics with SQL traceability</p>
+        </div>
+      </div>
+      <div class="status" id="statusPill">Ready</div>
+    </header>
+
+    <main class="layout">
+      <aside class="panel config-panel fade-up">
+        <h2>Session Config</h2>
+
+        <label for="sessionId">Session ID</label>
+        <input id="sessionId" type="text" value="ui-session" />
+
+        <label for="dbUrl">Database URL</label>
+        <input id="dbUrl" type="text" value="sqlite:///./examples/sqlite_demo/demo.db" />
+
+        <label for="semanticPath">Semantic Config</label>
+        <input id="semanticPath" type="text" value="./examples/sqlite_demo/semantic.yaml" />
+
+        <label for="llmProvider">LLM Provider</label>
+        <select id="llmProvider">
+          <option value="gemini" selected>gemini</option>
+          <option value="mock">mock</option>
+        </select>
+
+        <label for="llmModel">LLM Model</label>
+        <input id="llmModel" type="text" value="gemini-2.5-flash" />
+
+        <p class="hint">
+          Uses local <code>.env</code> for <code>GEMINI_API_KEY</code>. Notes are auto-saved under
+          <code>docs/conversations/</code>.
+        </p>
+      </aside>
+
+      <section class="panel chat-panel fade-up">
+        <div class="chat-header">
+          <h2>Conversation</h2>
+          <div class="prompt-row">
+            <button class="chip" data-prompt="Top 5 customers by revenue in the last 30 days">
+              Top Customers
+            </button>
+            <button class="chip" data-prompt="Break that down by category">
+              Category Split
+            </button>
+            <button class="chip" data-prompt="Show the SQL used previously">
+              Show SQL
+            </button>
+          </div>
+        </div>
+
+        <div id="chatLog" class="chat-log"></div>
+
+        <form id="chatForm" class="chat-form">
+          <input
+            id="chatInput"
+            type="text"
+            placeholder="Ask a business question..."
+            autocomplete="off"
+            required
+          />
+          <button type="submit" id="sendBtn">Send</button>
+        </form>
+      </section>
+
+      <section class="panel insight-panel fade-up">
+        <h2>Insights & Charts</h2>
+        <div class="kpis">
+          <div class="kpi">
+            <span>Mode</span>
+            <strong id="modeValue">-</strong>
+          </div>
+          <div class="kpi">
+            <span>Rows</span>
+            <strong id="rowCountValue">0</strong>
+          </div>
+          <div class="kpi">
+            <span>Chart</span>
+            <strong id="chartTypeValue">-</strong>
+          </div>
+        </div>
+
+        <div class="notes-path" id="notesPath"></div>
+
+        <div class="chart-wrap">
+          <canvas id="resultChart" aria-label="Query result chart"></canvas>
+          <div id="chartEmpty" class="empty-state">
+            Run a data query to render a chart preview.
+          </div>
+        </div>
+
+        <div class="sql-wrap">
+          <h3>SQL</h3>
+          <pre id="sqlText">-- No SQL yet</pre>
+        </div>
+
+        <div class="table-wrap">
+          <h3>Result Preview</h3>
+          <div id="resultTable" class="result-table"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/ui/app.js"></script>
+  </body>
+</html>

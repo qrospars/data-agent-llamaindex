@@ -69,6 +69,19 @@ The conversational agent uses semantic metadata for:
 - follow-up question suggestions tied to metrics/dimensions
 - automatic Markdown notes under `docs/conversations/<session_id>.md`
 
+## Web UI
+Start the API and open the built-in UI:
+```bash
+uvicorn data_agent_core.api.app:app --reload
+```
+
+Then visit `http://127.0.0.1:8000`.
+The UI supports:
+- conversation chat against `/chat`
+- SQL trace display
+- auto-rendered charts (`line`/`bar`) from query results
+- result table preview and session note path display
+
 ## Safety defaults
 - Single statement only
 - Read-only SELECT/CTE patterns
