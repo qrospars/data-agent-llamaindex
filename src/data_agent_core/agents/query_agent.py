@@ -26,9 +26,13 @@ class QueryAgent:
             max_row_limit=config.max_row_limit,
         )
         self.executor = SafeSQLExecutor(self.connector, truncate_rows=config.max_row_limit)
-        self.summarizer = AnswerSummarizer()
-        self.chart_suggester = ChartSuggester()
         self.llm = create_llm(config.llm_provider)
+        self.summarizer = AnswerSummarizer(
+            llm=self.llm,
+            semantic=self.semantic,
+            enable_llm_summary=config.llm_provider.provider != "mock",
+        )
+        self.chart_suggester = ChartSuggester()
 
     def generate_sql(self, question: str) -> SQLGenerationResult:
         context = SchemaIntrospector(self.connector, self.semantic).build_context()
@@ -60,8 +64,7 @@ class QueryAgent:
         return self.executor.execute(with_limit)
 
     def explain(self, question: str, sql: str, result: QueryExecutionResult) -> str:
-        _ = sql
-        return self.summarizer.summarize(question, result)
+        return self.summarizer.summarize(question, result, sql)
 
     def ask(self, question: str) -> AgentResponse:
         generation = self.generate_sql(question)

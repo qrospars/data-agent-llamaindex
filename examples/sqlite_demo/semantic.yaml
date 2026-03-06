@@ -1,3 +1,59 @@
 project: sqlite_demo
+tables:
+  - name: sales_summary
+    description: Daily revenue and units by customer, region, and product category.
+    preferred: true
+  - name: customers
+    description: Customer dimension with regions.
+  - name: products
+    description: Product catalog and category mapping.
+  - name: orders
+    description: Order headers with customer and date.
+  - name: order_items
+    description: Order line items with quantity and unit price.
+columns:
+  - table: sales_summary
+    name: order_date
+    description: ISO date of the order.
+  - table: sales_summary
+    name: customer_name
+    description: Human-readable customer name.
+  - table: sales_summary
+    name: region
+    description: Sales region.
+  - table: sales_summary
+    name: category
+    description: Product category.
+  - table: sales_summary
+    name: revenue
+    description: Revenue in USD.
+  - table: sales_summary
+    name: units
+    description: Total units sold.
+metrics:
+  - name: revenue
+    expression: SUM(revenue)
+  - name: units
+    expression: SUM(units)
+dimensions:
+  - name: order_date
+    description: Calendar day.
+  - name: customer_name
+    description: Customer account.
+  - name: category
+    description: Product category.
+  - name: region
+    description: Geo region.
+synonyms:
+  sales: ["revenue", "turnover"]
+  customers: ["accounts", "clients"]
+preferred_views:
+  - sales_summary
 business_rules:
   - Use sales_summary view when possible.
+  - Prefer date filters over full-history scans.
+examples:
+  - question: Top customers by revenue in the last 30 days
+    sql: SELECT customer_name, SUM(revenue) AS revenue FROM sales_summary WHERE order_date >= date('now','-30 day') GROUP BY customer_name ORDER BY revenue DESC LIMIT 10
+  - question: Revenue by category this month
+    sql: SELECT category, SUM(revenue) AS revenue FROM sales_summary WHERE strftime('%Y-%m', order_date) = strftime('%Y-%m', 'now') GROUP BY category ORDER BY revenue DESC LIMIT 10

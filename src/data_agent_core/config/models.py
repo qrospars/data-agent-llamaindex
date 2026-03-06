@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class ProviderConfig(BaseModel):
     provider: Literal["gemini", "mock"] = "mock"
-    model: str = "gemini-1.5-flash"
+    model: str = "gemini-2.5-flash"
     api_key_env: str = "GEMINI_API_KEY"
     temperature: float = 0.0
 
