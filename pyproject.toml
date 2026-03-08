@@ -18,6 +18,10 @@ dependencies = [
   "uvicorn>=0.30",
   "llama-index-core>=0.11.0",
   "llama-index-llms-google-genai>=0.2.0",
+  "duckdb>=1.0",
+  "duckdb-engine>=0.13",
+  "pyarrow>=16.0",
+  "mcp>=1.2.0",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +33,6 @@ dev = [
   "pre-commit>=3.7",
 ]
 postgres = ["psycopg[binary]>=3.2"]
-duckdb = ["duckdb>=1.0", "duckdb-engine>=0.13"]
 
 [project.scripts]
 data-agent = "data_agent_core.cli.main:app"

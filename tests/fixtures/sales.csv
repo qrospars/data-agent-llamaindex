@@ -1,0 +1,13 @@
+order_id,order_date,customer_name,region,category,revenue,units
+1,2025-01-03,Acme,North,Hardware,1200,12
+2,2025-01-10,Acme,North,Hardware,1320,13
+3,2025-01-15,Blue Harbor,South,Software,860,8
+4,2025-01-22,Blue Harbor,South,Software,900,9
+5,2025-02-03,Cinder,West,Services,540,5
+6,2025-02-11,Delta,East,Hardware,740,7
+7,2025-02-17,Acme,North,Services,680,6
+8,2025-02-23,Delta,East,Software,910,9
+9,2025-03-02,Cinder,West,Hardware,500,5
+10,2025-03-09,Acme,North,Hardware,1500,15
+11,2025-03-16,Blue Harbor,South,Services,610,6
+12,2025-03-22,Delta,East,Services,790,8

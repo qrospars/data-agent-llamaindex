@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from data_agent_core.agents.query_agent import QueryAgent
@@ -37,14 +38,21 @@ class ConversationAgent:
         self.store = store
         self.notes_logger = notes_logger
 
-    def chat(self, message: str, session_id: str = "default") -> ConversationResponse:
+    def chat(
+        self,
+        message: str,
+        session_id: str = "default",
+        progress_callback: Callable[[str, str], None] | None = None,
+    ) -> ConversationResponse:
         clean_message = message.strip()
         if not clean_message:
             raise ValueError("message cannot be empty")
+        self._emit(progress_callback, "conversation.start", "Received your question")
 
         state = self.store.get(session_id)
 
         if self._is_last_sql_request(clean_message):
+            self._emit(progress_callback, "intent.meta", "Detected SQL history request")
             if state.last_query_response is None:
                 return self._record_and_return(
                     state,
@@ -68,11 +76,14 @@ class ConversationAgent:
                 ),
             )
 
+        self._emit(progress_callback, "intent.infer", "Classifying request intent")
         intent = self._infer_intent(clean_message, state)
+        self._emit(progress_callback, "intent.result", f"Intent detected: {intent.lower()}")
         if intent == "QUERY":
+            self._emit(progress_callback, "query.resolve", "Resolving follow-up context")
             resolved_question = self._resolve_follow_up(clean_message, state)
             try:
-                result = self.query_agent.ask(resolved_question)
+                result = self.query_agent.ask(resolved_question, progress_callback=progress_callback)
             except Exception as exc:
                 return self._record_and_return(
                     state,
@@ -85,6 +96,7 @@ class ConversationAgent:
                     ),
                 )
 
+            self._emit(progress_callback, "conversation.format", "Formatting response and follow-ups")
             state.last_query_response = result
             payload = ConversationResponse(
                 session_id=session_id,
@@ -99,6 +111,7 @@ class ConversationAgent:
             return self._record_and_return(state, session_id, clean_message, payload)
 
         if intent == "META":
+            self._emit(progress_callback, "meta.reply", "Preparing metadata response")
             meta_message = self._meta_reply(clean_message, state)
             return self._record_and_return(
                 state,
@@ -107,6 +120,7 @@ class ConversationAgent:
                 ConversationResponse(session_id=session_id, mode="meta", message=meta_message),
             )
 
+        self._emit(progress_callback, "chat.reply", "Preparing conversational response")
         chat_message = self._chat_reply(clean_message, state)
         return self._record_and_return(
             state,
@@ -114,6 +128,20 @@ class ConversationAgent:
             clean_message,
             ConversationResponse(session_id=session_id, mode="chat", message=chat_message),
         )
+
+    def _emit(
+        self,
+        progress_callback: Callable[[str, str], None] | None,
+        stage: str,
+        message: str,
+    ) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(stage, message)
+        except Exception:
+            # Progress is advisory and should not block request handling.
+            return
 
     def _record_and_return(
         self,

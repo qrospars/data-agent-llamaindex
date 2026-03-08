@@ -3,6 +3,7 @@ const el = {
   chatInput: document.getElementById("chatInput"),
   chatLog: document.getElementById("chatLog"),
   sendBtn: document.getElementById("sendBtn"),
+  chips: Array.from(document.querySelectorAll(".chip")),
   status: document.getElementById("statusPill"),
   dbUrl: document.getElementById("dbUrl"),
   semanticPath: document.getElementById("semanticPath"),
@@ -20,23 +21,52 @@ const el = {
 };
 
 let chart = null;
+let isSubmitting = false;
 
-function setStatus(text, isError = false) {
+function setStatus(text, tone = "ready") {
   el.status.textContent = text;
-  el.status.style.borderColor = isError ? "rgba(248, 113, 113, 0.5)" : "rgba(45, 212, 191, 0.4)";
-  el.status.style.background = isError ? "rgba(248, 113, 113, 0.18)" : "rgba(45, 212, 191, 0.12)";
-  el.status.style.color = isError ? "#ffd2d2" : "#bffef3";
+  const palette =
+    tone === "error"
+      ? {
+          border: "rgba(248, 113, 113, 0.5)",
+          background: "rgba(248, 113, 113, 0.18)",
+          color: "#ffd2d2",
+        }
+      : tone === "busy"
+        ? {
+            border: "rgba(14, 165, 233, 0.45)",
+            background: "rgba(14, 165, 233, 0.14)",
+            color: "#d2f0ff",
+          }
+        : {
+            border: "rgba(45, 212, 191, 0.4)",
+            background: "rgba(45, 212, 191, 0.12)",
+            color: "#bffef3",
+          };
+
+  el.status.style.borderColor = palette.border;
+  el.status.style.background = palette.background;
+  el.status.style.color = palette.color;
 }
 
-function addMessage({ role, text, mode = "", sql = "" }) {
+function addMessage({ role, text, mode = "", sql = "", pending = false, reflectionSteps = [] }) {
   const block = document.createElement("div");
   block.className = `msg ${role === "user" ? "user" : "agent"}`;
+  if (pending) {
+    block.classList.add("pending");
+  }
 
   const head = document.createElement("div");
   head.className = "msg-head";
-  head.innerHTML = `<span>${role === "user" ? "You" : "Agent"}</span>${
-    mode ? `<span class="mode-badge">${mode}</span>` : ""
-  }`;
+  const roleSpan = document.createElement("span");
+  roleSpan.textContent = role === "user" ? "You" : "Agent";
+  head.appendChild(roleSpan);
+  if (mode) {
+    const modeSpan = document.createElement("span");
+    modeSpan.className = "mode-badge";
+    modeSpan.textContent = mode;
+    head.appendChild(modeSpan);
+  }
   block.appendChild(head);
 
   const paragraph = document.createElement("p");
@@ -50,8 +80,216 @@ function addMessage({ role, text, mode = "", sql = "" }) {
     block.appendChild(sqlPre);
   }
 
+  const stepEls = [];
+  if (reflectionSteps.length) {
+    const stepsTitle = document.createElement("div");
+    stepsTitle.className = "reflection-title";
+    stepsTitle.textContent = "Progress";
+    block.appendChild(stepsTitle);
+
+    const list = document.createElement("ul");
+    list.className = "reflection-steps";
+    reflectionSteps.forEach((stepText, idx) => {
+      const item = document.createElement("li");
+      item.className = "reflection-step";
+      if (idx === 0) {
+        item.classList.add("is-active");
+      }
+      item.textContent = stepText;
+      list.appendChild(item);
+      stepEls.push(item);
+    });
+    block.appendChild(list);
+  }
+
   el.chatLog.appendChild(block);
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
+  return { block, paragraph, stepEls };
+}
+
+function setInFlight(inFlight) {
+  isSubmitting = inFlight;
+  el.sendBtn.disabled = inFlight;
+  el.chatInput.disabled = inFlight;
+  el.chips.forEach((chip) => {
+    chip.disabled = inFlight;
+  });
+}
+
+function startThinkingFeedback() {
+  const thinking = addMessage({
+    role: "agent",
+    mode: "thinking",
+    text: "Thinking about your question",
+    pending: true,
+  });
+
+  const stepsTitle = document.createElement("div");
+  stepsTitle.className = "reflection-title";
+  stepsTitle.textContent = "Progress";
+  thinking.block.appendChild(stepsTitle);
+
+  const stepsList = document.createElement("ul");
+  stepsList.className = "reflection-steps";
+  thinking.block.appendChild(stepsList);
+
+  const stageToStep = new Map();
+  const baseText = "Thinking about your question";
+  let dotCount = 0;
+
+  const dotTimer = window.setInterval(() => {
+    dotCount = (dotCount + 1) % 4;
+    thinking.paragraph.textContent = `${baseText}${".".repeat(dotCount)}`;
+  }, 360);
+
+  return {
+    progress(stage, message) {
+      const stepText = String(message || stage || "").trim();
+      if (!stepText) {
+        return;
+      }
+      const key = String(stage || stepText);
+      let stepEl = stageToStep.get(key);
+      if (!stepEl) {
+        stepEl = document.createElement("li");
+        stepEl.className = "reflection-step";
+        stepEl.textContent = stepText;
+        stepsList.appendChild(stepEl);
+        stageToStep.set(key, stepEl);
+      } else {
+        stepEl.textContent = stepText;
+      }
+
+      stageToStep.forEach((otherEl) => {
+        if (otherEl === stepEl) {
+          otherEl.classList.add("is-active");
+          otherEl.classList.remove("is-done");
+        } else {
+          otherEl.classList.remove("is-active");
+          otherEl.classList.add("is-done");
+        }
+      });
+      el.chatLog.scrollTop = el.chatLog.scrollHeight;
+    },
+    stop(remove = true) {
+      window.clearInterval(dotTimer);
+      stageToStep.forEach((stepEl) => {
+        stepEl.classList.remove("is-active");
+        stepEl.classList.add("is-done");
+      });
+      if (remove && thinking.block.isConnected) {
+        thinking.block.remove();
+      }
+    },
+  };
+}
+
+async function readResponsePayload(response) {
+  const raw = await response.text();
+  if (!raw) {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { detail: raw };
+  }
+}
+
+function parseSseBlock(rawBlock) {
+  const lines = rawBlock.split("\n");
+  let event = "message";
+  const dataLines = [];
+
+  lines.forEach((line) => {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+      return;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  });
+
+  const rawData = dataLines.join("\n");
+  if (!rawData) {
+    return { event, data: {} };
+  }
+  try {
+    return { event, data: JSON.parse(rawData) };
+  } catch {
+    return { event, data: { message: rawData } };
+  }
+}
+
+async function streamChat(payload, onProgress) {
+  const response = await fetch("/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const data = await readResponsePayload(response);
+    const detail =
+      typeof data.detail === "string"
+        ? data.detail
+        : data.detail
+          ? JSON.stringify(data.detail)
+          : `Request failed (${response.status})`;
+    throw new Error(detail);
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming is not available in this browser.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalPayload = null;
+  let streamError = "";
+  let sawDoneEvent = false;
+
+  while (!sawDoneEvent) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const block = buffer.slice(0, boundary).trim();
+      buffer = buffer.slice(boundary + 2);
+      if (block) {
+        const parsed = parseSseBlock(block);
+        if (parsed.event === "progress") {
+          onProgress(parsed.data);
+        } else if (parsed.event === "final") {
+          finalPayload = parsed.data;
+        } else if (parsed.event === "error") {
+          streamError =
+            typeof parsed.data.message === "string"
+              ? parsed.data.message
+              : "Request failed while streaming.";
+        } else if (parsed.event === "done") {
+          sawDoneEvent = true;
+          await reader.cancel();
+          break;
+        }
+      }
+      boundary = buffer.indexOf("\n\n");
+    }
+  }
+
+  if (streamError) {
+    throw new Error(streamError);
+  }
+  if (!finalPayload) {
+    throw new Error("No final response received from stream.");
+  }
+  return finalPayload;
 }
 
 function renderTable(columns, rows) {
@@ -180,6 +418,7 @@ function escapeHtml(text) {
 }
 
 async function submitMessage(message) {
+  const thinking = startThinkingFeedback();
   const payload = {
     message,
     session_id: el.sessionId.value.trim() || "ui-session",
@@ -189,21 +428,14 @@ async function submitMessage(message) {
     llm_model: el.llmModel.value.trim(),
   };
 
-  setStatus("Running...");
-  el.sendBtn.disabled = true;
+  setStatus("Thinking...", "busy");
+  setInFlight(true);
   try {
-    const response = await fetch("/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    thinking.progress("conversation.wait", "Connecting to the analysis engine");
+    const data = await streamChat(payload, (progressData) => {
+      thinking.progress(progressData.stage, progressData.message);
     });
-
-    const data = await response.json();
-    if (!response.ok) {
-      const detail = data.detail ? JSON.stringify(data.detail) : JSON.stringify(data);
-      throw new Error(detail);
-    }
-
+    thinking.stop(true);
     addMessage({ role: "agent", text: data.message, mode: data.mode, sql: data.sql || "" });
     el.modeValue.textContent = data.mode || "-";
     el.rowCountValue.textContent = String(data.row_count ?? 0);
@@ -212,17 +444,21 @@ async function submitMessage(message) {
 
     renderTable(data.columns || [], data.rows || []);
     renderChart(data);
-    setStatus("Ready");
+    setStatus("Ready", "ready");
   } catch (error) {
+    thinking.stop(true);
     addMessage({ role: "agent", text: `Request failed: ${error.message}`, mode: "error" });
-    setStatus("Error", true);
+    setStatus("Error", "error");
   } finally {
-    el.sendBtn.disabled = false;
+    setInFlight(false);
   }
 }
 
 el.chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (isSubmitting) {
+    return;
+  }
   const message = el.chatInput.value.trim();
   if (!message) {
     return;
@@ -232,8 +468,11 @@ el.chatForm.addEventListener("submit", async (event) => {
   await submitMessage(message);
 });
 
-document.querySelectorAll(".chip").forEach((chip) => {
+el.chips.forEach((chip) => {
   chip.addEventListener("click", () => {
+    if (isSubmitting) {
+      return;
+    }
     const prompt = chip.getAttribute("data-prompt") || "";
     el.chatInput.value = prompt;
     el.chatInput.focus();

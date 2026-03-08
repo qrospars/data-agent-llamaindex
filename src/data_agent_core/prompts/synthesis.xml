@@ -1,0 +1,12 @@
+<synthesis_task>
+  <instructions>
+    Build an executive summary from findings only.
+    Output JSON only, matching ExecutiveSummary.
+    Do not invent facts or causes.
+    If causality is uncertain, say "possible explanation".
+    Include caveats and follow-up checks.
+  </instructions>
+  <dataset>{dataset_name}</dataset>
+  <question>{question}</question>
+  <ranked_findings>{findings_json}</ranked_findings>
+</synthesis_task>

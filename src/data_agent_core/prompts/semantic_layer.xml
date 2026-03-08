@@ -1,0 +1,15 @@
+<semantic_layer_task>
+  <instructions>
+    Build a semantic model from structured dataset profile and schema.
+    Return JSON only, matching SemanticModel exactly.
+    Use only known columns from schema_json.
+    Prefer simple additive metrics first.
+    Add confidence and caveats when uncertain.
+    Do not invent joins.
+  </instructions>
+  <dataset>{dataset_name}</dataset>
+  <table>{table_name}</table>
+  <business_context>{business_context}</business_context>
+  <profile>{profile_json}</profile>
+  <schema>{schema_json}</schema>
+</semantic_layer_task>

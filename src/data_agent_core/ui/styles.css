@@ -200,6 +200,12 @@ select:focus {
   background: rgba(45, 212, 191, 0.2);
 }
 
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .chat-log {
   height: 58vh;
   overflow: auto;
@@ -228,6 +234,12 @@ select:focus {
   background: rgba(20, 34, 49, 0.76);
 }
 
+.msg.pending {
+  border-style: dashed;
+  border-color: rgba(14, 165, 233, 0.45);
+  background: rgba(12, 31, 48, 0.9);
+}
+
 .msg-head {
   display: flex;
   justify-content: space-between;
@@ -244,6 +256,33 @@ select:focus {
   border-radius: 999px;
   padding: 0.1rem 0.45rem;
   color: #c8dbed;
+}
+
+.reflection-title {
+  margin-top: 0.58rem;
+  color: #9fc3de;
+  font-size: 0.73rem;
+  letter-spacing: 0.02em;
+}
+
+.reflection-steps {
+  margin: 0.3rem 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.22rem;
+}
+
+.reflection-step {
+  color: #86a3bd;
+  font-size: 0.76rem;
+}
+
+.reflection-step.is-active {
+  color: #d2f0ff;
+}
+
+.reflection-step.is-done {
+  color: #8ad7c8;
 }
 
 .msg p {

@@ -1,0 +1,13 @@
+<analysis_planner_task>
+  <instructions>
+    Create an AnalysisPlan JSON payload.
+    Output JSON only.
+    Tasks must use known metrics and dimensions only.
+    Keep tasks concise and ordered by priority.
+  </instructions>
+  <dataset>{dataset_name}</dataset>
+  <question>{question}</question>
+  <mode>{analysis_mode}</mode>
+  <profile>{profile_json}</profile>
+  <semantic>{semantic_json}</semantic>
+</analysis_planner_task>

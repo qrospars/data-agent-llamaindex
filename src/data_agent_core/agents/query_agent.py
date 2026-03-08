@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from data_agent_core.config.loader import load_semantic_config
 from data_agent_core.config.models import AppConfig
 from data_agent_core.connectors.sqlalchemy_connector import SQLAlchemyConnector
@@ -13,6 +15,18 @@ from data_agent_core.sql.formatter import ensure_limit
 from data_agent_core.sql.generator import SQLGenerator
 from data_agent_core.sql.rewriter import normalize_sql
 from data_agent_core.sql.validator import SQLValidator
+
+ProgressCallback = Callable[[str, str], None]
+
+
+def _emit_progress(progress_callback: ProgressCallback | None, stage: str, message: str) -> None:
+    if progress_callback is None:
+        return
+    try:
+        progress_callback(stage, message)
+    except Exception:
+        # Progress hooks are best-effort and must never break query execution.
+        return
 
 
 class QueryAgent:
@@ -34,16 +48,24 @@ class QueryAgent:
         )
         self.chart_suggester = ChartSuggester()
 
-    def generate_sql(self, question: str) -> SQLGenerationResult:
+    def generate_sql(
+        self,
+        question: str,
+        progress_callback: ProgressCallback | None = None,
+    ) -> SQLGenerationResult:
+        _emit_progress(progress_callback, "schema.inspect", "Inspecting schema and semantic context")
         context = SchemaIntrospector(self.connector, self.semantic).build_context()
+        _emit_progress(progress_callback, "sql.generate", "Generating SQL from your question")
         generator = SQLGenerator(self.llm, default_row_limit=self.config.default_row_limit)
         generated = generator.generate(question, context.minimal_schema_context, self.semantic)
+        _emit_progress(progress_callback, "sql.normalize", "Normalizing SQL and applying row limits")
         normalized = normalize_sql(generated.sql)
         with_limit, _, limit_warnings = ensure_limit(
             normalized,
             row_limit=self.config.default_row_limit,
             max_row_limit=self.config.max_row_limit,
         )
+        _emit_progress(progress_callback, "sql.validate", "Validating SQL safety rules")
         validation = self.validator.validate(with_limit)
         generated.sql = with_limit
         generated.normalized_sql = with_limit
@@ -63,15 +85,28 @@ class QueryAgent:
             raise ValueError(f"Unsafe SQL: {validated.errors}")
         return self.executor.execute(with_limit)
 
-    def explain(self, question: str, sql: str, result: QueryExecutionResult) -> str:
+    def explain(
+        self,
+        question: str,
+        sql: str,
+        result: QueryExecutionResult,
+        progress_callback: ProgressCallback | None = None,
+    ) -> str:
+        _emit_progress(progress_callback, "answer.summarize", "Summarizing the query result")
         return self.summarizer.summarize(question, result, sql)
 
-    def ask(self, question: str) -> AgentResponse:
-        generation = self.generate_sql(question)
+    def ask(
+        self,
+        question: str,
+        progress_callback: ProgressCallback | None = None,
+    ) -> AgentResponse:
+        generation = self.generate_sql(question, progress_callback=progress_callback)
         if not generation.validation_passed:
             raise ValueError(f"Generated SQL failed validation: {generation.validation_errors}")
+        _emit_progress(progress_callback, "sql.execute", "Executing SQL against the database")
         result = self.executor.execute(generation.sql)
-        summary = self.explain(question, generation.sql, result)
+        summary = self.explain(question, generation.sql, result, progress_callback=progress_callback)
+        _emit_progress(progress_callback, "answer.chart", "Selecting chart type from result shape")
         chart = self.chart_suggester.suggest(result)
         return AgentResponse(
             question=question,

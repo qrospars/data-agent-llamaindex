@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import threading
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from data_agent_core.agents.conversation_agent import ConversationAgent, InMemoryConversationStore
@@ -124,3 +128,65 @@ def chat(payload: ChatRequest) -> dict[str, object]:
         notes_logger=NOTES_LOGGER,
     )
     return conversation_agent.chat(payload.message, payload.session_id).model_dump()
+
+
+def _encode_sse(event: str, data: object) -> bytes:
+    payload = json.dumps(data, ensure_ascii=True)
+    return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+
+
+@router.post("/chat/stream")
+async def chat_stream(payload: ChatRequest) -> StreamingResponse:
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[tuple[str, object]] = asyncio.Queue()
+
+    def push(event: str, data: object) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, (event, data))
+
+    conversation_agent = ConversationAgent(
+        _agent(
+            payload.db_url,
+            payload.semantic_config_path,
+            payload.llm_provider,
+            payload.llm_model,
+            payload.llm_api_key_env,
+            payload.llm_temperature,
+        ),
+        CHAT_STORE,
+        notes_logger=NOTES_LOGGER,
+    )
+
+    def run_chat() -> None:
+        try:
+            response = conversation_agent.chat(
+                payload.message,
+                payload.session_id,
+                progress_callback=lambda stage, message: push(
+                    "progress",
+                    {"stage": stage, "message": message},
+                ),
+            )
+            push("final", response.model_dump())
+        except Exception as exc:
+            push("error", {"message": str(exc)})
+        finally:
+            push("done", {"ok": True})
+
+    threading.Thread(target=run_chat, daemon=True).start()
+
+    async def event_stream() -> object:
+        while True:
+            event, data = await queue.get()
+            yield _encode_sse(event, data)
+            if event == "done":
+                break
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
